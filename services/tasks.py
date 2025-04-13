@@ -15,7 +15,13 @@ print(f"Port: {port}")
 def home():
     return "Hello, this is a Flask Microservice" + " "+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-@app.route("/api/tasks", methods=["GET"])
+@app.route("/api/tasks", methods=["GET", "POST"])
+def handle_tasks():
+    if request.method == "GET":
+        return get_tasks()
+    elif request.method == "POST":
+        return create_task()
+
 def get_tasks():
     conn = None
     try:
@@ -102,6 +108,85 @@ def get_tasks():
                 app.logger.info(f"Error closing database connection: {e}")
                 # We don't return anything here since we're in a finally block
                 # and the response has already been sent
+
+def create_task():
+    conn = None
+    try:
+        # Validate required fields
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'message': 'No data provided'
+            }), 400
+
+        required_fields = ['title', 'description']
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return jsonify({
+                'status': 'error',
+                'message': f'Missing required fields: {", ".join(missing_fields)}'
+            }), 400
+
+        # Validate field types and lengths
+        if not isinstance(data['title'], str) or len(data['title'].strip()) == 0:
+            return jsonify({
+                'status': 'error',
+                'message': 'Title must be a non-empty string'
+            }), 400
+
+        if not isinstance(data['description'], str):
+            return jsonify({
+                'status': 'error',
+                'message': 'Description must be a string'
+            }), 400
+
+        # Get database connection
+        try:
+            conn = get_db_connection()
+        except ValueError as e:
+            return jsonify({
+                'status': 'error',
+                'message': str(e)
+            }), 500
+
+        # Insert new task and get the created task in one query
+        cursor = conn.execute(
+            """
+            INSERT INTO tasks (title, description, status) 
+            VALUES (?, ?, ?)
+            RETURNING id, title, description, status
+            """,
+            (data['title'].strip(), data['description'], 'pending')
+        )
+        conn.commit()
+        task = cursor.fetchone()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Task created successfully',
+            'data': {
+                'id': task[0],
+                'title': task[1],
+                'description': task[2],
+                'status': task[3]
+            }
+        }), 201
+
+    except Exception as e:
+        print(f"Error: {e}", flush=True)
+        app.logger.info(f"Error: {e}")
+        app.logger.exception("An unexpected error occurred")
+        return jsonify({
+            'status': 'error',
+            'message': 'An unexpected error occurred'
+        }), 500
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception as e:
+                app.logger.info(f"Error closing database connection: {e}")
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=port)
