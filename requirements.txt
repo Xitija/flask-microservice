@@ -1,0 +1,4 @@
+flask
+requests
+sqlitecloud
+python-dotenv
