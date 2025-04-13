@@ -1,9 +1,9 @@
-import sqlitecloud
 import os
+from services.utils.db_utils import get_db_connection
 
 def init_db():
     # Open the connection to SQLite Cloud
-    conn = sqlitecloud.connect("sqlitecloud://cvspla7knk.g4.sqlite.cloud:8860/task-management?apikey=VaIaDAUnEARXWoVTXxAQmaRHa5Acnf6I3mb1RIFeR6Q")
+    conn = get_db_connection()
 
     try:
         # Read and execute schema.sql
