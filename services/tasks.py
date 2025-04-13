@@ -86,8 +86,11 @@ def get_tasks():
         }), 200
         
     except Exception as e:
+        print(f"Error: {e}", flush=True)
         app.logger.info(f"Error: {e}")
+        app.logger.exception("An unexpected error occurred")  # logs traceback too
         return jsonify({
+            'error': e,
             'status': 'error',
             'message': 'An unexpected error occurred'
         }), 500
