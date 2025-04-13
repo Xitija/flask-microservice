@@ -9,10 +9,10 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env', '.env'))
 
 app = Flask(__name__)
 port = int(os.environ.get('PORT', 5000))
-
+print(f"Port: {port}")
 @app.route("/")
 def home():
-    return "Hello, this is a Flask Microservice" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return "Hello, this is a Flask Microservice" + " "+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 @app.route("/api/tasks", methods=["GET"])
 def get_tasks():
