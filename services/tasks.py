@@ -3,7 +3,7 @@ import os
 import logging
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
-from utils.db_utils import execute_query, execute_update
+from utils.db_utils import get_db_connection, execute_query, execute_update, close_cursor, close_connection
 
 # Load environment variables from the correct path
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env', '.env'))
@@ -62,15 +62,20 @@ def handle_tasks():
 
 @app.route("/api/tasks/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
+    conn = None
+    cursor = None
     try:
         data = request.get_json()
         error_response = validate_task_data(data)
         if error_response:
             return error_response
 
+        # Get database connection
+        conn = get_db_connection()
+
         # Check if task exists
-        task = execute_query("SELECT * FROM tasks WHERE id = ?", (task_id,), fetch_one=True)
-        if not task:
+        cursor = execute_query(conn, "SELECT * FROM tasks WHERE id = ?", (task_id,))
+        if not cursor.fetchone():
             return jsonify({
                 'status': 'error',
                 'message': f'Task with id {task_id} not found'
@@ -97,7 +102,7 @@ def update_task(task_id):
             WHERE id = ?
             RETURNING id, title, description, status
         """
-        cursor = execute_update(update_query, update_values)
+        cursor = execute_update(conn, update_query, update_values)
         updated_task = cursor.fetchone()
 
         return jsonify({
@@ -119,8 +124,15 @@ def update_task(task_id):
             'status': 'error',
             'message': 'An unexpected error occurred'
         }), 500
+    finally:
+        if cursor:
+            close_cursor(cursor)
+        if conn:
+            close_connection(conn)
 
 def get_tasks():
+    conn = None
+    cursor = None
     try:
         # Get pagination parameters
         try:
@@ -141,12 +153,15 @@ def get_tasks():
         # Calculate offset
         offset = (page - 1) * per_page
 
+        # Get database connection
+        conn = get_db_connection()
+
         # Get total count and tasks
-        total = execute_query("SELECT COUNT(*) FROM tasks", fetch_one=True)[0]
-        tasks = execute_query(
-            "SELECT * FROM tasks LIMIT ? OFFSET ?",
-            (per_page, offset)
-        )
+        cursor = execute_query(conn, "SELECT COUNT(*) FROM tasks")
+        total = cursor.fetchone()[0]
+
+        cursor = execute_query(conn, "SELECT * FROM tasks LIMIT ? OFFSET ?", (per_page, offset))
+        tasks = cursor.fetchall()
 
         # Convert tasks to list of dictionaries
         task_list = []
@@ -182,16 +197,27 @@ def get_tasks():
             'status': 'error',
             'message': 'An unexpected error occurred'
         }), 500
+    finally:
+        if cursor:
+            close_cursor(cursor)
+        if conn:
+            close_connection(conn)
 
 def create_task():
+    conn = None
+    cursor = None
     try:
         data = request.get_json()
         error_response = validate_task_data(data, required_fields=['title', 'description'])
         if error_response:
             return error_response
 
+        # Get database connection
+        conn = get_db_connection()
+
         # Insert new task
         cursor = execute_update(
+            conn,
             """
             INSERT INTO tasks (title, description, status) 
             VALUES (?, ?, ?)
@@ -220,6 +246,11 @@ def create_task():
             'status': 'error',
             'message': 'An unexpected error occurred'
         }), 500
+    finally:
+        if cursor:
+            close_cursor(cursor)
+        if conn:
+            close_connection(conn)
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=port)

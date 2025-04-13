@@ -1,40 +1,33 @@
 import os
 import sqlitecloud
 from dotenv import load_dotenv
-from contextlib import contextmanager
-
 # Load environment variables from the correct path
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env', '.env'))
 
-@contextmanager
 def get_db_connection():
-    """Create and return a database connection with context management"""
+    """Create and return a database connection"""
     db_url = os.getenv('DB_URL')
     print(f"DB URL: {db_url}")
     if not db_url:
         raise ValueError("Database URL not found in environment variables")
-    
-    conn = None
-    try:
-        conn = sqlitecloud.connect(db_url)
-        yield conn
-    except Exception as e:
-       return jsonify({
-          'status': 'error',
-          'message': str(e)
-        }), 500
+    return sqlitecloud.connect(db_url)
 
-def execute_query(query, params=None, fetch_one=False):
-    """Execute a query and return results"""
-    with get_db_connection() as conn:
-        cursor = conn.execute(query, params or ())
-        if fetch_one:
-            return cursor.fetchone()
-        return cursor.fetchall()
+def execute_query(conn, query, params=None):
+    """Execute a query and return cursor"""
+    return conn.execute(query, params or ())
 
-def execute_update(query, params=None):
-    """Execute an update query and commit changes"""
-    with get_db_connection() as conn:
-        cursor = conn.execute(query, params or ())
-        conn.commit()
-        return cursor 
+def execute_update(conn, query, params=None):
+    """Execute an update query and return cursor"""
+    cursor = conn.execute(query, params or ())
+    conn.commit()
+    return cursor
+
+def close_cursor(cursor):
+    """Close the cursor"""
+    if cursor:
+        cursor.close()
+
+def close_connection(conn):
+    """Close the database connection"""
+    if conn:
+        conn.close() 
