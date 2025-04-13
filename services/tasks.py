@@ -53,12 +53,12 @@ def validate_task_data(data, required_fields=None):
 def home():
     return "Hello, this is a Flask Microservice" + " "+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-@app.route("/api/tasks", methods=["GET", "POST"])
-def handle_tasks():
-    if request.method == "GET":
-        return get_tasks()
-    elif request.method == "POST":
-        return create_task()
+# @app.route("/api/tasks", methods=["GET", "POST"])
+# def handle_tasks():
+#     if request.method == "GET":
+#         return get_tasks()
+#     elif request.method == "POST":
+#         return create_task()
 
 @app.route("/api/tasks/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
@@ -130,6 +130,46 @@ def update_task(task_id):
         if conn:
             close_connection(conn)
 
+@app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
+def delete_task(task_id):
+    conn = None
+    cursor = None
+    try:
+        # Get database connection
+        conn = get_db_connection()
+
+        # Check if task exists
+        cursor = execute_query(conn, "SELECT * FROM tasks WHERE id = ?", (task_id,))
+        if not cursor.fetchone():
+            return jsonify({
+                'status': 'error',
+                'message': f'Task with id {task_id} not found'
+            }), 404
+
+        # Delete the task
+        cursor = execute_update(conn, "DELETE FROM tasks WHERE id = ?", (task_id,))
+
+        response = jsonify({
+            'status': 'success',
+            'message': f'Task with id {task_id} deleted successfully'
+        }), 200
+        return response
+
+    except Exception as e:
+        print(f"Error: {e}", flush=True)
+        app.logger.info(f"Error: {e}")
+        app.logger.exception("An unexpected error occurred")
+        return jsonify({
+            'status': 'error',
+            'message': 'An unexpected error occurred'
+        }), 500
+    finally:
+        if cursor:
+            close_cursor(cursor)
+        if conn:
+            close_connection(conn)
+
+@app.route("/api/tasks", methods=["GET"])
 def get_tasks():
     conn = None
     cursor = None
@@ -203,6 +243,7 @@ def get_tasks():
         if conn:
             close_connection(conn)
 
+@app.route("/api/tasks", methods=["POST"])
 def create_task():
     conn = None
     cursor = None
