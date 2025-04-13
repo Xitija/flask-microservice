@@ -1,5 +1,6 @@
 import datetime
 import os
+import logging
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
 from utils.db_utils import get_db_connection
@@ -85,7 +86,7 @@ def get_tasks():
         }), 200
         
     except Exception as e:
-        print(f"Error: {e}")
+        app.logger.info(f"Error: {e}")
         return jsonify({
             'status': 'error',
             'message': 'An unexpected error occurred'
@@ -95,7 +96,7 @@ def get_tasks():
             try:
                 conn.close()
             except Exception as e:
-                print(f"Error closing database connection: {e}")
+                app.logger.info(f"Error closing database connection: {e}")
                 # We don't return anything here since we're in a finally block
                 # and the response has already been sent
 
