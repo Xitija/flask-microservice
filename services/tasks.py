@@ -3,7 +3,7 @@ import os
 import logging
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
-from utils.db_utils import get_db_connection, execute_query, execute_update, close_cursor, close_connection
+from services.utils.db_utils import get_db_connection, execute_query, execute_update, close_cursor, close_connection
 
 # Load environment variables from the correct path
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env', '.env'))
