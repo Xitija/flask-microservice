@@ -85,6 +85,7 @@ def get_tasks():
         }), 200
         
     except Exception as e:
+        print(f"Error: {e}")
         return jsonify({
             'status': 'error',
             'message': 'An unexpected error occurred'
