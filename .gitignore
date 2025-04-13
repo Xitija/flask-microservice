@@ -39,3 +39,6 @@ wheels/
 # OS
 .DS_Store
 Thumbs.db
+services/__init__.py
+services/tests/__init__.py
+services/utils/__init__.py
