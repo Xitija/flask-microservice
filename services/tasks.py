@@ -2,7 +2,7 @@ import datetime
 import os
 import logging
 from flask import Flask, request, Blueprint
-from flask_restx import Api, Resource, fields
+from flask_restx import Resource, fields
 from dotenv import load_dotenv
 from services.utils.db_utils import get_db_connection, execute_query, execute_update, close_cursor, close_connection
 from services.utils.auth_utils import token_required
@@ -11,20 +11,19 @@ from services.utils.auth_utils import token_required
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env', '.env'))
 
 # Create a Blueprint for task routes
-task_bp = Blueprint('tasks', __name__, url_prefix='/api')
+task_bp = Blueprint('tasks', __name__)
 
-# Initialize API with Swagger documentation
-api = Api(task_bp, 
-          version='1.0', 
-          title='Task Management API',
-          description='A simple task management API',
-          doc='/swagger')
+# Create a namespace for tasks
+ns = None  # Will be initialized in init_app
 
-# Add health check endpoint at the root level
-@api.route('/health')
+# Create a separate namespace for health check
+health_ns = None  # Will be initialized in init_app
+
+# Define models for Swagger documentation
+task_model = None
+task_input_model = None
+
 class HealthCheck(Resource):
-    @api.doc('health_check')
-    @api.response(200, 'Service is healthy')
     def get(self):
         """Check service health status"""
         return {
@@ -32,25 +31,6 @@ class HealthCheck(Resource):
             'message': 'Service is healthy',
             'timestamp': datetime.datetime.utcnow().isoformat()
         }
-
-# Create a namespace for tasks
-ns = api.namespace('tasks', description='Task operations')
-
-# Define models for Swagger documentation
-task_model = api.model('Task', {
-    'id': fields.Integer(readonly=True, description='The task unique identifier'),
-    'title': fields.String(required=True, description='The task title'),
-    'description': fields.String(required=True, description='The task description'),
-    'status': fields.String(description='The task status', enum=['pending', 'in_progress', 'completed']),
-    'created_at': fields.DateTime(readonly=True, description='Task creation timestamp'),
-    'updated_at': fields.DateTime(readonly=True, description='Task last update timestamp')
-})
-
-task_input_model = api.model('TaskInput', {
-    'title': fields.String(required=True, description='The task title'),
-    'description': fields.String(required=True, description='The task description'),
-    'status': fields.String(description='The task status', enum=['pending', 'in_progress', 'completed'])
-})
 
 def validate_task_data(data, required_fields=None):
     """Validate task data and return error response if invalid"""
@@ -96,12 +76,7 @@ def validate_task_data(data, required_fields=None):
 #     elif request.method == "POST":
 #         return create_task()
 
-@ns.route('')
 class TaskList(Resource):
-    @ns.doc('list_tasks')
-    @ns.response(200, 'Success', task_model)
-    @ns.response(400, 'Bad Request')
-    @ns.response(500, 'Internal Server Error')
     @token_required
     def get(self, user_id):
         """List all tasks for a user"""
@@ -193,11 +168,6 @@ class TaskList(Resource):
             if conn:
                 close_connection(conn)
 
-    @ns.doc('create_task')
-    @ns.expect(task_input_model)
-    @ns.response(201, 'Task created successfully', task_model)
-    @ns.response(400, 'Bad Request')
-    @ns.response(500, 'Internal Server Error')
     @token_required
     def post(self, user_id):
         """Create a new task"""
@@ -258,14 +228,7 @@ class TaskList(Resource):
             if conn:
                 close_connection(conn)
 
-@ns.route('/<int:task_id>')
 class Task(Resource):
-    @ns.doc('update_task')
-    @ns.expect(task_input_model)
-    @ns.response(200, 'Task updated successfully', task_model)
-    @ns.response(400, 'Bad Request')
-    @ns.response(404, 'Task not found')
-    @ns.response(500, 'Internal Server Error')
     @token_required
     def put(self, user_id, task_id):
         """Update a task"""
@@ -346,10 +309,6 @@ class Task(Resource):
             if conn:
                 close_connection(conn)
 
-    @ns.doc('delete_task')
-    @ns.response(200, 'Task deleted successfully')
-    @ns.response(404, 'Task not found')
-    @ns.response(500, 'Internal Server Error')
     @token_required
     def delete(self, user_id, task_id):
         """Delete a task"""
@@ -388,4 +347,95 @@ class Task(Resource):
             if conn:
                 close_connection(conn)
 
-api.add_namespace(ns, path='/tasks')
+def init_app(api):
+    global ns, task_model, task_input_model
+    
+    # Create a namespace for tasks with the correct path
+    ns = api.namespace('tasks', description='Task operations', path='/api/tasks')
+
+    # Create a separate namespace for health check
+    health_ns = api.namespace('health', description='Health check operations', path='/api/health')
+
+    # Define models for Swagger documentation
+    task_model = api.model('Task', {
+        'id': fields.Integer(readonly=True, description='The task unique identifier'),
+        'title': fields.String(required=True, description='The task title'),
+        'description': fields.String(required=True, description='The task description'),
+        'status': fields.String(description='The task status', enum=['pending', 'in_progress', 'completed']),
+        'created_at': fields.DateTime(readonly=True, description='Task creation timestamp'),
+        'updated_at': fields.DateTime(readonly=True, description='Task last update timestamp')
+    })
+
+    task_input_model = api.model('TaskInput', {
+        'title': fields.String(required=True, description='The task title'),
+        'description': fields.String(required=True, description='The task description'),
+        'status': fields.String(description='The task status', enum=['pending', 'in_progress', 'completed'])
+    })
+
+    # Add authorization documentation
+    authorizations = {
+        'Bearer Auth': {
+            'type': 'apiKey',
+            'in': 'header',
+            'name': 'Authorization',
+            'description': "Enter your JWT token in the format: Bearer your.jwt.token\n\nExample: Bearer token_here"
+        }
+    }
+
+    # Add security to the API
+    api.authorizations = authorizations
+    api.security = 'Bearer Auth'
+
+    # Register routes
+    health_ns.add_resource(HealthCheck, '')
+    ns.add_resource(TaskList, '')
+    ns.add_resource(Task, '/<int:task_id>')
+    
+    # Add Swagger documentation to HealthCheck
+    health_ns.doc('health_check', security=None)(HealthCheck.get)
+    health_ns.response(200, 'Service is healthy')(HealthCheck.get)
+    
+    # Add Swagger documentation to TaskList
+    ns.doc('list_tasks', 
+        security='Bearer Auth',
+        params={
+            'page': {
+                'description': 'Page number for pagination',
+                'type': 'integer',
+                'default': 1,
+                'in': 'query'
+            },
+            'per_page': {
+                'description': 'Number of items per page',
+                'type': 'integer',
+                'default': 10,
+                'in': 'query'
+            }
+        }
+    )(TaskList.get)
+    ns.response(200, 'Success', task_model)(TaskList.get)
+    ns.response(400, 'Bad Request')(TaskList.get)
+    ns.response(401, 'Unauthorized')(TaskList.get)
+    ns.response(500, 'Internal Server Error')(TaskList.get)
+    
+    ns.doc('create_task', security='Bearer Auth')(TaskList.post)
+    ns.expect(task_input_model)(TaskList.post)
+    ns.response(201, 'Task created successfully', task_model)(TaskList.post)
+    ns.response(400, 'Bad Request')(TaskList.post)
+    ns.response(401, 'Unauthorized')(TaskList.post)
+    ns.response(500, 'Internal Server Error')(TaskList.post)
+    
+    # Add Swagger documentation to Task
+    ns.doc('update_task', security='Bearer Auth')(Task.put)
+    ns.expect(task_input_model)(Task.put)
+    ns.response(200, 'Task updated successfully', task_model)(Task.put)
+    ns.response(400, 'Bad Request')(Task.put)
+    ns.response(401, 'Unauthorized')(Task.put)
+    ns.response(404, 'Task not found')(Task.put)
+    ns.response(500, 'Internal Server Error')(Task.put)
+    
+    ns.doc('delete_task', security='Bearer Auth')(Task.delete)
+    ns.response(200, 'Task deleted successfully')(Task.delete)
+    ns.response(401, 'Unauthorized')(Task.delete)
+    ns.response(404, 'Task not found')(Task.delete)
+    ns.response(500, 'Internal Server Error')(Task.delete)
