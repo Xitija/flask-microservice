@@ -3,3 +3,4 @@ requests
 sqlitecloud
 python-dotenv
 PyJWT
+flask-restx

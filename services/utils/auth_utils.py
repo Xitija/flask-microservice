@@ -65,6 +65,6 @@ def token_required(f):
             }), 401
 
         # Add user_id to the function's arguments
-        return f(user_id, *args, **kwargs)
+        return f(*args, user_id=user_id, **kwargs)
 
     return decorated 
