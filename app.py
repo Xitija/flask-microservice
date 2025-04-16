@@ -1,13 +1,29 @@
 from flask import Flask
-from services.users import user_bp
-from services.tasks import task_bp
+from flask_restx import Api
+from services.users import user_bp, init_app as init_users
+from services.tasks import task_bp, init_app as init_tasks
 
 def create_app():
     app = Flask(__name__)
     print("Initializing Flask app...", flush=True)
-    # Register blueprints with URL prefixes
-    # app.register_blueprint(user_bp, url_prefix='/api/users')
+    
+    # Create a single API instance
+    api = Api(
+        app,
+        version='1.0',
+        title='Task Management API',
+        description='A simple task management API with user authentication',
+        doc='/swagger'
+    )
+    
+    # Initialize both services with the same API instance
+    init_users(api)
+    init_tasks(api)
+    
+    # Register blueprints
+    app.register_blueprint(user_bp)
     app.register_blueprint(task_bp)
+    
     print("\nRegistered URL routes:", flush=True)
     for rule in app.url_map.iter_rules():
         print(f"{rule.endpoint}: {rule.methods} {rule}", flush=True)
