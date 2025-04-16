@@ -46,20 +46,20 @@ def token_required(f):
             try:
                 token = auth_header.split(" ")[1]
             except IndexError:
-                return jsonify({
+                return ({
                     'status': 'error',
                     'message': 'Invalid token format'
                 }), 401
 
         if not token:
-            return jsonify({
+            return ({
                 'status': 'error',
                 'message': 'Token is missing'
             }), 401
 
         user_id = verify_token(token)
         if not user_id:
-            return jsonify({
+            return ({
                 'status': 'error',
                 'message': 'Invalid or expired token'
             }), 401

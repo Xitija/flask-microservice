@@ -10,13 +10,8 @@ from services.utils.auth_utils import token_required
 # Load environment variables from the correct path
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env', '.env'))
 
-# app = Flask(__name__)
-# port = int(os.environ.get('PORT', 5000))
-# print(f"Port: {port}")
-
 # Create a Blueprint for task routes
 task_bp = Blueprint('tasks', __name__, url_prefix='/api')
-
 
 # Initialize API with Swagger documentation
 api = Api(task_bp, 
@@ -25,14 +20,11 @@ api = Api(task_bp,
           description='A simple task management API',
           doc='/swagger')
 
-# Create a namespace for tasks
-ns = api.namespace('tasks', description='Task operations')
-
-# Add health check endpoint
-@ns.route('/health')
+# Add health check endpoint at the root level
+@api.route('/health')
 class HealthCheck(Resource):
-    @ns.doc('health_check')
-    @ns.response(200, 'Service is healthy')
+    @api.doc('health_check')
+    @api.response(200, 'Service is healthy')
     def get(self):
         """Check service health status"""
         return {
@@ -40,6 +32,9 @@ class HealthCheck(Resource):
             'message': 'Service is healthy',
             'timestamp': datetime.datetime.utcnow().isoformat()
         }
+
+# Create a namespace for tasks
+ns = api.namespace('tasks', description='Task operations')
 
 # Define models for Swagger documentation
 task_model = api.model('Task', {
@@ -93,10 +88,6 @@ def validate_task_data(data, required_fields=None):
         }), 400
 
     return None
-
-# @ns.route("/")
-# def home():
-#     return "Hello, this is a Flask Microservice" + " "+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # @app.route("/api/tasks", methods=["GET", "POST"])
 # def handle_tasks():
@@ -271,6 +262,137 @@ class TaskList(Resource):
             if conn:
                 close_connection(conn)
 
+@ns.route('/<int:task_id>')
+class Task(Resource):
+    @ns.doc('update_task')
+    @ns.expect(task_input_model)
+    @ns.response(200, 'Task updated successfully', task_model)
+    @ns.response(400, 'Bad Request')
+    @ns.response(404, 'Task not found')
+    @ns.response(500, 'Internal Server Error')
+    @token_required
+    def put(self, user_id, task_id):
+        """Update a task"""
+        conn = None
+        cursor = None
+        try:
+            print(f"Current user: {user_id}", flush=True)
+            print(f"Current task_id: {task_id}", flush=True)
+         
+            data = request.get_json()
+            
+            # Validate input data
+            if not data:
+                return {
+                    'status': 'error',
+                    'message': 'No data provided'
+                }, 400
+            
+            
+            # Get database connection
+            conn = get_db_connection()
 
+            # Check if task exists and belongs to the current user
+            cursor = execute_query(conn,
+                "SELECT id FROM tasks WHERE id = ? AND user_id = ?",
+                (task_id, user_id)
+            )
+            if not cursor.fetchone():
+                return {
+                    'status': 'error',
+                    'message': 'Task not found'
+                }, 404
+
+            # Update task
+            cursor = execute_update(conn,
+                """
+                UPDATE tasks
+                SET title = COALESCE(?, title),
+                    description = COALESCE(?, description),
+                    status = COALESCE(?, status),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+                RETURNING id, title, description, status, created_at, updated_at
+                """,
+                (data.get('title'), data.get('description'), data.get('status'), task_id, user_id)
+            )
+            task = cursor.fetchone()
+            
+            if not task:
+                return {
+                    'status': 'error',
+                    'message': 'Task not found'
+                }, 404
+
+            # Format the response to match task_model
+            response_data = {
+                'id': task[0],
+                'title': task[1],
+                'description': task[2],
+                'status': task[3],
+                'created_at': task[4],
+                'updated_at': task[5]
+            }
+
+            return {
+                'status': 'success',
+                'message': 'Task updated successfully',
+                'data': response_data
+            }, 200
+
+        except Exception as e:
+            logging.error(f"Error: {e}")
+            api.logger.error(f"Error: {e}")
+            return {
+                'status': 'error',
+                'message': 'An unexpected error occurred'
+            }, 500
+        finally:
+            if cursor:
+                close_cursor(cursor)
+            if conn:
+                close_connection(conn)
+
+    @ns.doc('delete_task')
+    @ns.response(200, 'Task deleted successfully')
+    @ns.response(404, 'Task not found')
+    @ns.response(500, 'Internal Server Error')
+    @token_required
+    def delete(self, user_id, task_id):
+        """Delete a task"""
+        conn = None
+        cursor = None
+        try:
+            # Get database connection
+            conn = get_db_connection()
+
+            # Delete task
+            cursor = execute_update(conn,
+                "DELETE FROM tasks WHERE id = ? AND user_id = ?",
+                (task_id, user_id)
+            )
+
+            if cursor.rowcount == 0:
+                return {
+                    'status': 'error',
+                    'message': 'Task not found'
+                }, 404
+
+            return {
+                'status': 'success',
+                'message': 'Task deleted successfully'
+            }, 200
+
+        except Exception as e:
+            logging.error(f"Error: {e}")
+            return {
+                'status': 'error',
+                'message': 'An unexpected error occurred'
+            }, 500
+        finally:
+            if cursor:
+                close_cursor(cursor)
+            if conn:
+                close_connection(conn)
 
 api.add_namespace(ns, path='/tasks')
