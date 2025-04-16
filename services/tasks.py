@@ -1,7 +1,7 @@
 import datetime
 import os
 import logging
-from flask import Flask, jsonify, request, Blueprint
+from flask import Flask, request, Blueprint
 from flask_restx import Api, Resource, fields
 from dotenv import load_dotenv
 from services.utils.db_utils import get_db_connection, execute_query, execute_update, close_cursor, close_connection
@@ -55,7 +55,7 @@ task_input_model = api.model('TaskInput', {
 def validate_task_data(data, required_fields=None):
     """Validate task data and return error response if invalid"""
     if not data:
-        return jsonify({
+        return ({
             'status': 'error',
             'message': 'No data provided'
         }), 400
@@ -63,26 +63,26 @@ def validate_task_data(data, required_fields=None):
     if required_fields:
         missing_fields = [field for field in required_fields if field not in data]
         if missing_fields:
-            return jsonify({
+            return ({
                 'status': 'error',
                 'message': f'Missing required fields: {", ".join(missing_fields)}'
             }), 400
 
     # Validate field types and values
     if 'title' in data and (not isinstance(data['title'], str) or len(data['title'].strip()) == 0):
-        return jsonify({
+        return ({
             'status': 'error',
             'message': 'Title must be a non-empty string'
         }), 400
 
     if 'description' in data and not isinstance(data['description'], str):
-        return jsonify({
+        return ({
             'status': 'error',
             'message': 'Description must be a string'
         }), 400
 
     if 'status' in data and data['status'] not in ['pending', 'in_progress', 'completed']:
-        return jsonify({
+        return ({
             'status': 'error',
             'message': 'Status must be one of: pending, in_progress, completed'
         }), 400
@@ -207,14 +207,10 @@ class TaskList(Resource):
             data = request.get_json()
             print(f"Current user: {user_id}", flush=True)
             
-            # Validate required fields
-            required_fields = ['title', 'description']
-            missing_fields = [field for field in required_fields if field not in data]
-            if missing_fields:
-                return {
-                    'status': 'error',
-                    'message': f'Missing required fields: {", ".join(missing_fields)}'
-                }, 400
+            # Validate task data using the validate_task_data function
+            validation_result = validate_task_data(data, required_fields=['title', 'description'])
+            if validation_result:
+                return validation_result
 
             # Get database connection
             conn = get_db_connection()
@@ -281,13 +277,10 @@ class Task(Resource):
          
             data = request.get_json()
             
-            # Validate input data
-            if not data:
-                return {
-                    'status': 'error',
-                    'message': 'No data provided'
-                }, 400
-            
+            # Validate input data using validate_task_data function
+            validation_result = validate_task_data(data)
+            if validation_result:
+                return validation_result
             
             # Get database connection
             conn = get_db_connection()
