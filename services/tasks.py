@@ -156,8 +156,7 @@ class TaskList(Resource):
         except Exception as e:
             logging.error(f"Error: {e}")
             print(f"Error: {e}", flush=True)
-            api.logger.info(f"Error: {e}")
-            api.logger.exception("An unexpected error occurred")
+            logging.exception("An unexpected error occurred")
             return {
                 'status': 'error',
                 'message': 'An unexpected error occurred'
@@ -216,8 +215,7 @@ class TaskList(Resource):
         except Exception as e:
             print(f"Error: {e}", flush=True)
             logging.error(f"Error: {e}")
-            api.logger.info(f"Error: {e}")
-            api.logger.exception("An unexpected error occurred")
+            logging.exception("An unexpected error occurred")
             return {
                 'status': 'error',
                 'message': 'An unexpected error occurred'
@@ -298,7 +296,7 @@ class Task(Resource):
 
         except Exception as e:
             logging.error(f"Error: {e}")
-            api.logger.error(f"Error: {e}")
+            logging.exception("An unexpected error occurred")
             return {
                 'status': 'error',
                 'message': 'An unexpected error occurred'
@@ -337,6 +335,7 @@ class Task(Resource):
 
         except Exception as e:
             logging.error(f"Error: {e}")
+            logging.exception("An unexpected error occurred")
             return {
                 'status': 'error',
                 'message': 'An unexpected error occurred'

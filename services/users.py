@@ -1,3 +1,4 @@
+import logging
 import os
 from flask import Blueprint, request
 from flask_restx import Resource, fields
@@ -70,6 +71,8 @@ class UserRegistration(Resource):
 
         except Exception as e:
             print(f"Error: {e}", flush=True)
+            logging.error(f"Error: {e}")
+            logging.exception("An unexpected error occurred")
             return {'status': 'error', 'message': 'An unexpected error occurred'}, 500
         finally:
             if cursor:
@@ -119,6 +122,8 @@ class UserLogin(Resource):
 
         except Exception as e:
             print(f"Error: {e}", flush=True)
+            logging.error(f"Error: {e}")
+            logging.exception("An unexpected error occurred")
             return {'status': 'error', 'message': 'An unexpected error occurred'}, 500
         finally:
             if cursor:
